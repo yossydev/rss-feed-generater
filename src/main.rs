@@ -1,9 +1,10 @@
-use reqwest::blocking;
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use scraper::{Html, Selector};
 use std::error::Error;
 
 #[derive(Debug)]
-struct Post {
+pub struct Post {
     title: String,
     link: String,
     pub_date: String,
@@ -12,7 +13,7 @@ struct Post {
 fn fetch_posts() -> Result<Vec<Post>, Box<dyn Error>> {
     let mut posts = Vec::new();
     let url = "https://yossy.dev";
-    let resp = blocking::get(url)?.text()?;
+    let resp = ureq::get(url).call()?.into_string()?;
     let document = Html::parse_document(&resp);
     let post_selector = Selector::parse("li.text-lg").unwrap();
     for post in document.select(&post_selector) {
@@ -32,13 +33,19 @@ fn fetch_posts() -> Result<Vec<Post>, Box<dyn Error>> {
             .unwrap();
         let link = format!("https://yossy.dev{}", link_suffix);
         let pub_date = post.text().collect::<Vec<_>>()[0].trim().to_string();
+        let formatted_date = NaiveDateTime::parse_from_str(&pub_date, "%Y/%m/%d")
+            .ok()
+            .and_then(|date| {
+                FixedOffset::east_opt(9 * 3600)
+                    .map(|offset| DateTime::<FixedOffset>::from_naive_utc_and_offset(date, offset))
+            })
+            .map_or(pub_date.clone(), |date| date.to_rfc2822());
         posts.push(Post {
             title,
             link,
-            pub_date,
+            pub_date: formatted_date,
         });
     }
-
     Ok(posts)
 }
 
@@ -60,9 +67,18 @@ fn generate_rss(posts: Vec<Post>) -> String {
     rss
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let posts = fetch_posts()?;
+async fn rss_feed() -> impl Responder {
+    let posts = fetch_posts().unwrap_or_else(|_| vec![]);
     let rss_feed = generate_rss(posts);
-    println!("{}", rss_feed);
-    Ok(())
+    HttpResponse::Ok()
+        .content_type("application/rss+xml; charset=utf-8")
+        .body(rss_feed)
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| App::new().route("/rss", web::get().to(rss_feed)))
+        .bind("0.0.0.0:8080")?
+        .run()
+        .await
 }
