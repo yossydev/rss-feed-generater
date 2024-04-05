@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 scraper = "0.19.0"
-chrono = "0.4.35"
+chrono = "0.4.37"
 ureq = "2.9.6"
 actix-web = "4.5.1"
 
