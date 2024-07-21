@@ -50,12 +50,13 @@ async fn fetch_posts(url: &str) -> Result<Vec<Post>> {
 }
 
 fn format_date(date_str: &str) -> String {
-    NaiveDateTime::parse_from_str(date_str, "%Y/%m/%d")
-        .ok()
-        .and_then(|date| {
-            Some(DateTime::<FixedOffset>::from_utc(date, FixedOffset::east(9 * 3600)).to_rfc2822())
-        })
-        .unwrap_or_else(|| date_str.to_string())
+    if let Ok(date) = NaiveDateTime::parse_from_str(date_str, "%Y/%m/%d") {
+        let offset = FixedOffset::east(9 * 3600);
+        let datetime = DateTime::<FixedOffset>::from_local(date, offset);
+        datetime.format("%a, %d %b %Y %T %Z").to_string()
+    } else {
+        date_str.to_string()
+    }
 }
 
 fn generate_rss(posts: Vec<Post>) -> String {
@@ -71,7 +72,7 @@ fn generate_rss(posts: Vec<Post>) -> String {
 }
 
 async fn rss_feed() -> impl Responder {
-    let posts = fetch_posts("https://yossy.dev")
+    let posts = fetch_posts("https://yossy.dev/all")
         .await
         .unwrap_or_else(|_| vec![]);
     let rss_feed = generate_rss(posts);
