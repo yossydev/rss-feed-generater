@@ -34,7 +34,16 @@ async fn fetch_posts(url: &str) -> Result<Vec<Post>> {
                 .value()
                 .attr("href")
                 .unwrap();
-            let link = format!("{}{}", url, link_suffix);
+
+            let mut foo;
+            if link_suffix.contains("https://") {
+                foo = url.replace("https://yossy.dev/all", "");
+            } else {
+                foo = url.replace("/all", "");
+            };
+
+            let link = format!("{}{}", foo, link_suffix);
+            println!("{}", link);
             let pub_date = post.text().collect::<Vec<_>>()[0].trim().to_string();
             let formatted_date = format_date(&pub_date);
 
@@ -51,9 +60,15 @@ async fn fetch_posts(url: &str) -> Result<Vec<Post>> {
 
 fn format_date(date_str: &str) -> String {
     if let Ok(date) = NaiveDateTime::parse_from_str(date_str, "%Y/%m/%d") {
-        let offset = FixedOffset::east(9 * 3600);
-        let datetime = DateTime::<FixedOffset>::from_local(date, offset);
-        datetime.format("%a, %d %b %Y %T %Z").to_string()
+        let offset = FixedOffset::east_opt(9 * 3600);
+        match offset {
+            Some(i) => {
+                let datetime = DateTime::<FixedOffset>::from_local(date, i);
+                datetime.format("%a, %d %b %Y %T %Z").to_string()
+            }
+            // println!を使用するとエラーにになる ref: https://github.com/rust-lang/rust/issues/24157#issuecomment-303826608
+            None => panic!("It's not one!"),
+        }
     } else {
         date_str.to_string()
     }
